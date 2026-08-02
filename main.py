@@ -12,12 +12,12 @@ def build_help_text():
     lines = ["Available commands: ",""]
     width = max(len(l) for l in KEYWORD_HELP) + 2
     for keyword, description in KEYWORD_HELP.items():
-        lines.apppend(f" {keyword:<{width}}{description}")
+        lines.append(f" {keyword:<{width}}{description}")
     lines.append("")
     lines.append("Type 'help <keyword>' for more detail above")
     return "\n".join(lines)
     
-def run_command(command_line)
+def run_command(command_line):
     """Takes the raw text user typed, returns the string to print as a response """
     parts = command_line.strip().split()
     if not parts:
@@ -35,9 +35,9 @@ def run_command(command_line)
         return build_help_text()
     elif cmd == "yesterday":
         return "Placeholder: you piece of shit"
-    elif cmd == "clear"
+    elif cmd == "clear":
         return "__CLEAR__"
-    elif cmd == "exit"
+    elif cmd == "exit":
         return "__EXIT__"
     else:
         return f" '{cmd}' is not recognize dumbass"
@@ -64,14 +64,18 @@ text_widget = tk.Text(
     pady=10,
 )
 text_widget.pack(fill="both", expand=True)
-PROMPT = "DevConsole>"
+PROMPT = "DevConsole> "
 
-def print_prompt()
+#add colons to functions
+
+def print_prompt():
     text_widget.insert(tk.END, PROMPT)
-    text_widget.mark_set("input_start", tk.END)
+#issue-1-when-keyword-is-inputted-nothing-happend
+    text_widget.mark_set("input_start", "end-1c") # land where typing actually happens
+    text_widget.mark_gravity("input_start","left") # pin it so it doesn't drift as you type
     text_widget.see(tk.END)
 
-def on_enter(event)
+def on_enter(event):
     line = text_widget.get("input_start","end-1c")
     text_widget.insert(tk.END, "\n")
     output = run_command(line)
@@ -82,20 +86,31 @@ def on_enter(event)
         root.destroy()
         return "break"
     elif output:
-        text.widget.insert(tk.END, output + "\n")
+        text_widget.insert(tk.END, output + "\n")
     
     print_prompt()
     return "break"
 
+def protect_history(event): 
+    if text_widget.compare(tk.INSERT, "<=", "input_start"): 
+        return "break"
 
-text_widget.insert(tk.END, "==============================\n")
+text_widget.bind("<Return>", on_enter) 
+text_widget.bind("<BackSpace>", protect_history) 
+text_widget.bind("<Left>", protect_history) 
+text_widget.bind("<Up>", lambda e: "break") 
+text_widget.bind("<Down>", lambda e: "break")
+
+text_widget.insert(tk.END, "===================================\n")
 text_widget.insert(tk.END, "           DevConsole v1      \n")
 text_widget.insert(tk.END, "      created by: CodingONPJs \n")
-text_widget.insert(tk.END, "==============================\n")
-text_widget.insert(tk.END, "Hello Coding!\n")
+text_widget.insert(tk.END, "===================================\n")
+text_widget.insert(tk.END, "Hello Coding! Type 'help' \n\n")
 
-text_widget.mark_set("bookmark","6.0")
-text_widget.mark_set("insert","bookmark")
-   
+#text_widget.mark_set("bookmark","6.0")
+#text_widget.mark_set("insert","bookmark")
+print_prompt()
+text_widget.focus_set()
+
 #text_widget.config(state="disabled")
 root.mainloop()
