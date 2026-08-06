@@ -1,5 +1,20 @@
-#DevConsole v1
 import tkinter as tk
+import csv
+import os
+#DevConsole v1
+#===============================================
+#0803 v0.025 - working interface
+#0804 v0.050 - add initialization file
+#
+#
+#
+#
+#
+#
+#===============================================
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+CONFIG_PATH = os.path.join(BASE_DIR, "config", "init.csv")
 
 KEYWORD_HELP = {
     "navigate": "type in 'help' ",
@@ -7,6 +22,99 @@ KEYWORD_HELP = {
     "clear":"Clears your workspace"
 }
 
+def is_initialized():
+    """True only if init.csv exists, has 4 fields, and its initialized flag is 1."""
+    if not os.path.isfile(CONFIG_PATH):
+     return False
+    try:
+        with open(CONFIG_PATH, newline="", encoding="utf-8") as f:
+            row = next(csv.reader(f), None)
+    except OSError:
+        return False
+    return bool(row) and len(row) >= 4 and row[0].strip() == "1"
+
+def load_config():
+    """Reads init.csv into a dict. Only call when is_initialized() is True """
+    with open(CONFIG_PATH, newline="", encoding="utf-8") as f:
+        row = next(csv.reader(f))
+    return {
+        "initialized": row[0].strip() == "1",
+        "name": row[1].strip(),
+        "identity": row[2].strip(),
+        "watch_dir": row[3].strip(),
+    }    
+
+def save_config(name,identity,watch_dir):
+    """Writes init.csv, creating the config/folder next to the script if needed"""
+    os.makedirs(os.path.dirname(CONFIG_PATH), exist_ok = True)
+    with open(CONFIG_PATH, "w", newline="", encoding="utf-8") as f:
+        csv.writer(f).writerow(["1",name,identity,watch_dir])
+
+
+#First run set up
+config = None
+setup_state = None
+setup_answers = {}
+
+def start_setup():
+    global setup_state
+    setup_state = "name"
+    text_widget.insert(tk.END, "Looks like this your first time running DevConsole \n")
+    text_widget.insert(tk.END, "Let's get you set up. \n\n")
+    text_widget.insert(tk.END, "What's your name? \n")
+
+def handle_setup_input(line):
+    global setup_state, config
+    answer = line.strip()
+    if setup_state == "name":
+        if not answer:
+            text_widget.insert(tk.END, "Name can't be empty, How do you want me to call you?\n")
+            
+            return
+        
+        setup_answers["name"] = answer
+        setup_state = "identity"
+        #setup_answers["identity"]=0
+        text_widget.insert(tk.END, f"Nice to meet you, {answer}. \n")
+        text_widget.insert(tk.END, "What do you do? (e.g. Dev, Author, Sniper) \n")
+        
+    elif setup_state == "identity":
+        if not answer:
+            text_widget.insert(tk.END, "I don't know who you are, What exactly do you do?")
+            return
+            
+        setup_answers["identity"] = answer
+        setup_state = "directory"
+        #setup_answers["watch_dir"]="AAA"
+        #print(setup_answers["watch_dir"]) <--- for testing only
+        text_widget.insert(tk.END, "Which folder should I keep an eye on? \n")
+        text_widget.insert(tk.END, "(Type full path, e.g. C:\\Projects)\n")
+    elif setup_state == "directory":
+        if not answer:
+            text_widget.insert(tk.END, "Provide a folder that I should watch")
+            return
+            
+        if not os.path.isdir(answer):
+            try:
+                os.makedirs(answer)
+                text_widget.insert(tk.END, f"That folder don't exists -- created {answer}")
+                return
+            except OSError as e:
+                text_widget.insert(tk.END, f"Couldn't create folder ({e}). Try another path \n")
+                return
+        setup_answers["watch_dir"] = answer        
+        
+    #setup_answers["identity"] = answer
+    #print(len(setup_answers)) #<----troubleshooting
+    if len(setup_answers) >= 3: #<---- this is the fix not to go on save before the answers are completed
+        #print(setup_answers) #<-- for troubelshooting
+        save_config(setup_answers["name"],setup_answers["identity"],setup_answers["watch_dir"])
+        config = load_config()
+        setup_state = None
+        text_widget.insert(tk.END, "\n Setup complete, You are all set! type help.")
+    
+
+        
 def build_help_text():
     """Builds the aligned keyword description blah blah blah. """
     lines = ["Available commands: ",""]
@@ -33,8 +141,17 @@ def run_command(command_line):
                 f"No help entry for  '{keyword}'. Type 'help' to see available keywords."                
             )
         return build_help_text()
+    elif cmd == "navigate":
+        return "Placeholder: You dumb as shit are you?"
     elif cmd == "yesterday":
         return "Placeholder: you piece of shit"
+    elif cmd == "whoami":
+        return(
+            f"Name: {config['name']}\n"
+            f"Identity: {config['identity']}\n"
+            f"Watching:{config['watch_dir']}\n"
+            
+        )
     elif cmd == "clear":
         return "__CLEAR__"
     elif cmd == "exit":
@@ -48,9 +165,6 @@ root.title("DevConsole")
 root.geometry("800x500")
 root.configure(bg="black")
 
-
-    
-    
 #----terminal area-----
 text_widget = tk.Text(
     root,
@@ -78,15 +192,18 @@ def print_prompt():
 def on_enter(event):
     line = text_widget.get("input_start","end-1c")
     text_widget.insert(tk.END, "\n")
-    output = run_command(line)
-
-    if output == "__CLEAR__":
-        text.widget.delete("1.0", tk.END)
-    elif output == "__EXIT__":
-        root.destroy()
-        return "break"
-    elif output:
-        text_widget.insert(tk.END, output + "\n")
+    
+    if setup_state is not None:
+        handle_setup_input(line)
+    else:
+            output = run_command(line)
+            if output == "__CLEAR__":
+                text.widget.delete("1.0", tk.END)
+            elif output == "__EXIT__":
+                root.destroy()
+                return "break"
+            elif output:
+                text_widget.insert(tk.END, output + "\n")
     
     print_prompt()
     return "break"
@@ -106,6 +223,13 @@ text_widget.insert(tk.END, "           DevConsole v1      \n")
 text_widget.insert(tk.END, "      created by: CodingONPJs \n")
 text_widget.insert(tk.END, "===================================\n")
 text_widget.insert(tk.END, "Hello Coding! Type 'help' \n\n")
+
+if is_initialized():
+    config = load_config()
+    text_widget.insert(tk.END, f"Welcome back {config['name']}. Type 'help' to start \n")
+else:
+    start_setup()
+
 
 #text_widget.mark_set("bookmark","6.0")
 #text_widget.mark_set("insert","bookmark")
