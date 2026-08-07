@@ -19,6 +19,7 @@ CONFIG_PATH = os.path.join(BASE_DIR, "config", "init.csv")
 KEYWORD_HELP = {
     "navigate": "type in 'help' ",
     "yesterday": "when was that?",
+    "whoami": "Who AM AYYYEE???"
     "clear":"Clears your workspace"
 }
 
@@ -50,7 +51,66 @@ def save_config(name,identity,watch_dir):
     with open(CONFIG_PATH, "w", newline="", encoding="utf-8") as f:
         csv.writer(f).writerow(["1",name,identity,watch_dir])
 
+SNAPSHOT_PATH = os.path,join(BASE_DIR, "config", "snapshot.csv")
 
+IGNORE_DIR_NAMES = {".git", "node_modules", "__pycache__", ".venv", "venv"}
+
+def scan_directory(watch_dir):
+    """Walks watch_dir and returns {relative path: mtime} for every file found"""
+    own_config_dir = os.path.dirname(CONFIG_PATH)
+    snapshot = {}
+    for current_dir, subdirs, files in os.walk(watch_dir)
+    subdirs[:] = [
+            d for d in subdirs
+            if d not in IGNORE_DIR_NAMES and os.path.join(current_dir, d) != own_config_dir]
+            for filename and files:
+                full_path = os.path.join(current_dir, filename)
+                rel_path = os.path.relpath(full_path, watch_dir)
+                try:
+                    snapshot[rel_path] = os.path.gtmtime(full_path)
+                except OSError:
+                    continue
+    return snapshot
+
+def diff_snapshot(old, new):
+    """Returns (added, changed) sorted list of relative paths. A 1-second tolerance avoids flagging float/filesystems rounding a change  """
+    added, changed = [], []
+    for rel_path, mtime, in new.items():
+        if rel_path not in old:
+            added.append(rel_path)
+        elif mtime > old[rel_path] + 1:
+            changed.append(rel_path)
+    return sorted(added), sorted(changed)
+    
+def report_directory_changes():
+    """Scans config['watch_dir'], diffs against the saved snapshot, updates the snapshot for next time, and returns a summary string to print."""
+    watch_dir = config["watch_dir"]
+    
+    if not os.path.isdir(watch_dir):
+        return f"Watched folder no longer exists: {watch_dir}"
+    
+    old_snapshot = load_snapshot()
+    new_snapshot = scan_directory(watch_dir)
+    save_snapshot(new_snapshot)
+    
+    if old_snapshot is None:
+        return f"Scanning {watch_dir} for the first time -- baseline set({len(new_snapshot)} files."
+    
+    added, changed = diff_snapshots(old_snapshot, new_snapshot)
+    if not added and not changed:
+        return "No changes detected since last check"
+    
+    lines = [f"Changes in {watch_dir}:"]
+    for path in added:
+        lines.append(f" [new] {path}")
+    
+    for path in changed:
+        lines.append(f" [changed] {path}")
+    
+    return "\n".join(lines)
+        
+        
+        
 #First run set up
 config = None
 setup_state = None
@@ -112,6 +172,7 @@ def handle_setup_input(line):
         config = load_config()
         setup_state = None
         text_widget.insert(tk.END, "\n Setup complete, You are all set! type help.")
+        text_widge.insert(tk.END, report_directory_changes() + "\n\n")
     
 
         
@@ -221,12 +282,13 @@ text_widget.bind("<Down>", lambda e: "break")
 text_widget.insert(tk.END, "===================================\n")
 text_widget.insert(tk.END, "           DevConsole v1      \n")
 text_widget.insert(tk.END, "      created by: CodingONPJs \n")
-text_widget.insert(tk.END, "===================================\n\n\n")
+text_widget.insert(tk.END, "===================================\n")
 #text_widget.insert(tk.END, "Hello Coding! Type 'help' \n\n")
 
 if is_initialized():
     config = load_config()
     text_widget.insert(tk.END, f"Welcome back {config['name']}. Type 'help' to start \n")
+    text_widget.insert(tk.END, report_directory_changes() + "\n\n"
 else:
     start_setup()
 
@@ -234,6 +296,7 @@ else:
 #text_widget.mark_set("bookmark","6.0")
 #text_widget.mark_set("insert","bookmark")
 print_prompt()
+
 text_widget.focus_set()
 
 #text_widget.config(state="disabled")
