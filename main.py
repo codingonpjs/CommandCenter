@@ -221,8 +221,8 @@ text_widget.bind("<Down>", lambda e: "break")
 text_widget.insert(tk.END, "===================================\n")
 text_widget.insert(tk.END, "           DevConsole v1      \n")
 text_widget.insert(tk.END, "      created by: CodingONPJs \n")
-text_widget.insert(tk.END, "===================================\n")
-text_widget.insert(tk.END, "Hello Coding! Type 'help' \n\n")
+text_widget.insert(tk.END, "===================================\n\n\n")
+#text_widget.insert(tk.END, "Hello Coding! Type 'help' \n\n")
 
 if is_initialized():
     config = load_config()
