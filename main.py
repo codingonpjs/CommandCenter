@@ -174,21 +174,20 @@ def handle_setup_input(line):
         text_widget.insert(tk.END, "(Type full path, e.g. C:\\Projects)\n")
     elif setup_state == "directory":
         if not answer:
-            text_widget.insert(tk.END, "Provide a folder that I should watch")
+            text_widget.insert(tk.END, "Provide a folder that I should watch \n")
             return
             
         if not os.path.isdir(answer):
             try:
                 os.makedirs(answer)
-                text_widget.insert(tk.END, f"That folder don't exists -- created {answer}")
-                return
+                text_widget.insert(tk.END, f"That folder don't exists -- created {answer} \n")
             except OSError as e:
                 text_widget.insert(tk.END, f"Couldn't create folder ({e}). Try another path \n")
                 return
         setup_answers["watch_dir"] = answer        
         
     #setup_answers["identity"] = answer
-    #print(len(setup_answers)) #<----troubleshooting
+    print(len(setup_answers)) #<----troubleshooting
     if len(setup_answers) >= 3: #<---- this is the fix not to go on save before the answers are completed
         #print(setup_answers) #<-- for troubelshooting
         save_config(setup_answers["name"],setup_answers["identity"],setup_answers["watch_dir"])
