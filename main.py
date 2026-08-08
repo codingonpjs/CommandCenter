@@ -7,8 +7,7 @@ import os
 #0804 v0.050 - add initialization file
 #0808 v0.100 - add watcher
 #git fetch origin
-#git checkout Issue#2-Technical-issue-in-report_directory_changes()-function
-#
+#git checkout issue3-generates-error-when-clear-istyped
 #
 #
 #
@@ -281,7 +280,7 @@ def on_enter(event):
     else:
             output = run_command(line)
             if output == "__CLEAR__":
-                text.widget.delete("1.0", tk.END)
+                text_widget.delete("1.0", tk.END)
             elif output == "__EXIT__":
                 root.destroy()
                 return "break"
