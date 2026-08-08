@@ -5,23 +5,30 @@ import os
 #===============================================
 #0803 v0.025 - working interface
 #0804 v0.050 - add initialization file
-#
-#
+#0808 v0.100 - add watcher
+#Issue1 - 
+#git fetch origin
+#git checkout Issue#1-Initial-directory-provided-not-accepted
 #
 #
 #
 #
 #===============================================
-
+#Globals
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 CONFIG_PATH = os.path.join(BASE_DIR, "config", "init.csv")
 
 KEYWORD_HELP = {
     "navigate": "type in 'help' ",
     "yesterday": "when was that?",
-    "whoami": "Who AM AYYYEE???"
+    "whoami": "Who AM AYYYEE???",
     "clear":"Clears your workspace"
 }
+
+SNAPSHOT_PATH = os.path.join(BASE_DIR, "config", "snapshot.csv")
+IGNORE_DIR_NAMES = {".git", "node_modules", "__pycache__", ".venv", "venv"}
+
+#Globals END
 
 def is_initialized():
     """True only if init.csv exists, has 4 fields, and its initialized flag is 1."""
@@ -51,24 +58,41 @@ def save_config(name,identity,watch_dir):
     with open(CONFIG_PATH, "w", newline="", encoding="utf-8") as f:
         csv.writer(f).writerow(["1",name,identity,watch_dir])
 
-SNAPSHOT_PATH = os.path,join(BASE_DIR, "config", "snapshot.csv")
+def load_snapshot():
+    """Returns the previously saved {relative_path: mtime} dict, or None of this is the first scan ever (no snapshot on disk yet)."""
+    if not os.path.isfile(SNAPSHOT_PATH):
+        return None
+    snapshot = {}
+    with open(SNAPSHOT_PATH, newline="", encoding="utf-8") as f:
+        for row in csv.reader(f):
+            if len(row) >=2:
+                snapshot[row[0]] = float(row[1])
+    return snapshot
 
-IGNORE_DIR_NAMES = {".git", "node_modules", "__pycache__", ".venv", "venv"}
+def save_snapshot(snapshot):
+    os.makedirs(os.path.dirname(SNAPSHOT_PATH), exist_ok=True)
+    with open(SNAPSHOT_PATH, "w", newline="", encoding="utf-8") as f:
+        writer = csv.writer(f)
+        for rel_path, mtime in snapshot.items():
+            writer.writerow([rel_path, mtime])
+    return snapshot
+
 
 def scan_directory(watch_dir):
     """Walks watch_dir and returns {relative path: mtime} for every file found"""
     own_config_dir = os.path.dirname(CONFIG_PATH)
     snapshot = {}
-    for current_dir, subdirs, files in os.walk(watch_dir)
-    subdirs[:] = [
+    for current_dir, subdirs, files in os.walk(watch_dir):
+        subdirs[:] = [
             d for d in subdirs
-            if d not in IGNORE_DIR_NAMES and os.path.join(current_dir, d) != own_config_dir]
-            for filename and files:
-                full_path = os.path.join(current_dir, filename)
-                rel_path = os.path.relpath(full_path, watch_dir)
-                try:
-                    snapshot[rel_path] = os.path.gtmtime(full_path)
-                except OSError:
+            if d not in IGNORE_DIR_NAMES and os.path.join(current_dir, d) != own_config_dir
+         ]
+        for filename in files:
+            full_path = os.path.join(current_dir, filename)
+            rel_path = os.path.relpath(full_path, watch_dir)
+            try:
+                snapshot[rel_path] = os.path.gtmtime(full_path)
+            except OSError:
                     continue
     return snapshot
 
@@ -172,7 +196,7 @@ def handle_setup_input(line):
         config = load_config()
         setup_state = None
         text_widget.insert(tk.END, "\n Setup complete, You are all set! type help.")
-        text_widge.insert(tk.END, report_directory_changes() + "\n\n")
+        text_widget.insert(tk.END, report_directory_changes() + "\n\n")
     
 
         
@@ -288,7 +312,7 @@ text_widget.insert(tk.END, "===================================\n")
 if is_initialized():
     config = load_config()
     text_widget.insert(tk.END, f"Welcome back {config['name']}. Type 'help' to start \n")
-    text_widget.insert(tk.END, report_directory_changes() + "\n\n"
+    text_widget.insert(tk.END, report_directory_changes() + "\n\n")
 else:
     start_setup()
 
