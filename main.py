@@ -26,6 +26,18 @@ KEYWORD_HELP = {
 SNAPSHOT_PATH = os.path.join(BASE_DIR, "config", "snapshot.csv")
 IGNORE_DIR_NAMES = {".git", "node_modules", "__pycache__", ".venv", "venv"}
 
+WEATHER_CITY = "Marikina City"  # <-- edit this to your own city
+
+WMO_WEATHER_CODES = {
+    0: "Clear sky", 1: "Mainly clear", 2: "Partly cloudy", 3: "Overcast",
+    45: "Fog", 48: "Icy fog",
+    51: "Light drizzle", 53: "Moderate drizzle", 55: "Heavy drizzle",
+    61: "Slight rain", 63: "Moderate rain", 65: "Heavy rain",
+    71: "Slight snow", 73: "Moderate snow", 75: "Heavy snow",
+    80: "Slight showers", 81: "Moderate showers", 82: "Heavy showers",
+    95: "Thunderstorm", 96: "Thunderstorm with hail", 99: "Severe thunderstorm with hail",
+}
+
 #Globals END
 
 def is_initialized():
@@ -131,7 +143,47 @@ def report_directory_changes():
     
     return "\n".join(lines)
         
-        
+# --- Weather ---
+# Uses Open-Meteo (open-meteo.com) -- free, no API key or signup required,
+# which matters since this app gets distributed as a standalone .exe with
+# no good place to keep a secret key anyway.
+
+
+
+def get_weather_summary(city=None, timeout=5):
+    """Fetches current weather for `city` (defaults to WEATHER_CITY) via Open-Meteo.
+    Returns a one-line string, or None if anything goes wrong -- no internet, city
+    not found, slow/failed API call, unexpected response shape, etc. Callers must
+    handle a None result gracefully rather than assume the fetch always succeeds."""
+    city = city or WEATHER_CITY
+    try:
+        geo = requests.get(
+            "https://geocoding-api.open-meteo.com/v1/search",
+            params={"name": city, "count": 1},
+            timeout=timeout,
+        )
+        geo.raise_for_status()
+        results = geo.json().get("results")
+        if not results:
+            return None
+        lat, lon = results[0]["latitude"], results[0]["longitude"]
+
+        weather = requests.get(
+            "https://api.open-meteo.com/v1/forecast",
+            params={"latitude": lat, "longitude": lon, "current_weather": "true"},
+            timeout=timeout,
+        )
+        weather.raise_for_status()
+        current = weather.json().get("current_weather")
+        if not current:
+            return None
+
+        temp = current["temperature"]
+        condition = WMO_WEATHER_CODES.get(current.get("weathercode"), "Unknown conditions")
+        return f"{city}: {temp}\u00b0C, {condition}"
+
+    except (requests.RequestException, KeyError, ValueError, IndexError, TypeError):
+        return None      
         
 #First run set up
 config = None
@@ -308,7 +360,12 @@ text_widget.insert(tk.END, "===================================\n")
 
 if is_initialized():
     config = load_config()
-    text_widget.insert(tk.END, f"Welcome back {config['name']}. Type 'help' to start \n")
+    text_widget.insert(tk.END, f"Welcome back, {config['name']}. Type 'help' to get started.\n\n")
+
+    weather_line = get_weather_summary()
+    if weather_line:
+        text_widget.insert(tk.END, f"Weather -- {weather_line}\n\n")
+
     text_widget.insert(tk.END, report_directory_changes() + "\n\n")
 else:
     start_setup()
