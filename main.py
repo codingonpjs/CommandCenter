@@ -6,9 +6,8 @@ import os
 #0803 v0.025 - working interface
 #0804 v0.050 - add initialization file
 #0808 v0.100 - add watcher
-#Issue1 - 
 #git fetch origin
-#git checkout Issue#1-Initial-directory-provided-not-accepted
+#git checkout Issue#2-Technical-issue-in-report_directory_changes()-function
 #
 #
 #
@@ -91,12 +90,12 @@ def scan_directory(watch_dir):
             full_path = os.path.join(current_dir, filename)
             rel_path = os.path.relpath(full_path, watch_dir)
             try:
-                snapshot[rel_path] = os.path.gtmtime(full_path)
+                snapshot[rel_path] = os.path.getmtime(full_path)
             except OSError:
                     continue
     return snapshot
 
-def diff_snapshot(old, new):
+def diff_snapshots(old, new):
     """Returns (added, changed) sorted list of relative paths. A 1-second tolerance avoids flagging float/filesystems rounding a change  """
     added, changed = [], []
     for rel_path, mtime, in new.items():
