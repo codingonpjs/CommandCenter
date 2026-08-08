@@ -13,13 +13,16 @@ import os
 #
 #===============================================
 
+#globals
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 CONFIG_PATH = os.path.join(BASE_DIR, "config", "init.csv")
+SNAPSHOT_PATH = os.path.join(BASE_DIR, "config", "snapshot.csv")
+IGNORE_DIR_NAMES = {".git", "node_modules", "__pycache__", ".venv", "venv"}
 
 KEYWORD_HELP = {
     "navigate": "type in 'help' ",
     "yesterday": "when was that?",
-    "whoami": "Who AM AYYYEE???"
+    "whoami": "Who AM AYYYEE???",
     "clear":"Clears your workspace"
 }
 
@@ -51,19 +54,18 @@ def save_config(name,identity,watch_dir):
     with open(CONFIG_PATH, "w", newline="", encoding="utf-8") as f:
         csv.writer(f).writerow(["1",name,identity,watch_dir])
 
-SNAPSHOT_PATH = os.path,join(BASE_DIR, "config", "snapshot.csv")
 
-IGNORE_DIR_NAMES = {".git", "node_modules", "__pycache__", ".venv", "venv"}
 
 def scan_directory(watch_dir):
     """Walks watch_dir and returns {relative path: mtime} for every file found"""
     own_config_dir = os.path.dirname(CONFIG_PATH)
     snapshot = {}
-    for current_dir, subdirs, files in os.walk(watch_dir)
-    subdirs[:] = [
+    for current_dir, subdirs, files in os.walk(watch_dir):
+        subdirs[:] = [
             d for d in subdirs
-            if d not in IGNORE_DIR_NAMES and os.path.join(current_dir, d) != own_config_dir]
-            for filename and files:
+            if d not in IGNORE_DIR_NAMES and os.path.join(current_dir, d) != own_config_dir
+        ]
+        for filename in files:
                 full_path = os.path.join(current_dir, filename)
                 rel_path = os.path.relpath(full_path, watch_dir)
                 try:
@@ -71,8 +73,28 @@ def scan_directory(watch_dir):
                 except OSError:
                     continue
     return snapshot
+    
+def load_snapshot():
+    """Returns the previously saved {relative_path: mtime} dict, or None if this
+    is the first scan ever (no snapshot on disk yet)."""
+    if not os.path.isfile(SNAPSHOT_PATH):
+        return None
+    snapshot = {}
+    with open(SNAPSHOT_PATH, newline="", encoding="utf-8") as f:
+        for row in csv.reader(f):
+            if len(row) >= 2:
+                snapshot[row[0]] = float(row[1])
+    return snapshot
 
-def diff_snapshot(old, new):
+
+def save_snapshot(snapshot):
+    os.makedirs(os.path.dirname(SNAPSHOT_PATH), exist_ok=True)
+    with open(SNAPSHOT_PATH, "w", newline="", encoding="utf-8") as f:
+        writer = csv.writer(f)
+        for rel_path, mtime in snapshot.items():
+            writer.writerow([rel_path, mtime])
+
+def diff_snapshots(old, new):
     """Returns (added, changed) sorted list of relative paths. A 1-second tolerance avoids flagging float/filesystems rounding a change  """
     added, changed = [], []
     for rel_path, mtime, in new.items():
@@ -172,7 +194,7 @@ def handle_setup_input(line):
         config = load_config()
         setup_state = None
         text_widget.insert(tk.END, "\n Setup complete, You are all set! type help.")
-        text_widge.insert(tk.END, report_directory_changes() + "\n\n")
+        text_widget.insert(tk.END, report_directory_changes() + "\n\n")
     
 
         
@@ -288,7 +310,7 @@ text_widget.insert(tk.END, "===================================\n")
 if is_initialized():
     config = load_config()
     text_widget.insert(tk.END, f"Welcome back {config['name']}. Type 'help' to start \n")
-    text_widget.insert(tk.END, report_directory_changes() + "\n\n"
+    text_widget.insert(tk.END, report_directory_changes() + "\n\n")
 else:
     start_setup()
 
