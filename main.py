@@ -300,6 +300,7 @@ root = tk.Tk()
 root.title("DevConsole")
 root.geometry("800x500")
 root.configure(bg="black")
+root.attributes("-fullscreen",True)
 
 #----terminal area-----
 text_widget = tk.Text(
