@@ -1,6 +1,7 @@
 import tkinter as tk
 import csv
 import os
+import requests
 #DevConsole v1
 #===============================================
 #0803 v0.025 - working interface
@@ -298,6 +299,7 @@ root = tk.Tk()
 root.title("DevConsole")
 root.geometry("800x500")
 root.configure(bg="black")
+root.attributes("-fullscreen",True)
 
 #----terminal area-----
 text_widget = tk.Text(
