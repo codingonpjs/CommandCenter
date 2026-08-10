@@ -1,6 +1,8 @@
 import tkinter as tk
 import csv
 import os
+import sys
+import requests
 #DevConsole v1
 #===============================================
 #0803 v0.025 - working interface
