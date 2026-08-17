@@ -9,12 +9,13 @@ import requests
 #0804 v0.050 - add initialization file
 #0808 v0.100 - add watcher
 #git fetch origin
-#git checkout issue3-generates-error-when-clear-istyped
+#git checkout separate-prompts-for-different-screen
 #
 #
 #
 #===============================================
 #Globals
+PROMPT = ""
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 CONFIG_PATH = os.path.join(BASE_DIR, "config", "init.csv")
 
@@ -24,7 +25,10 @@ KEYWORD_HELP = {
     "whoami": "Who AM AYYYEE???",
     "clear":"Clears your workspace"
 }
-
+KEYWORD_START = {
+    "mke": "To make DIR in the ",
+    "log": "To log you do for today."
+}
 SNAPSHOT_PATH = os.path.join(BASE_DIR, "config", "snapshot.csv")
 IGNORE_DIR_NAMES = {".git", "node_modules", "__pycache__", ".venv", "venv"}
 
@@ -39,6 +43,8 @@ WMO_WEATHER_CODES = {
     80: "Slight showers", 81: "Moderate showers", 82: "Heavy showers",
     95: "Thunderstorm", 96: "Thunderstorm with hail", 99: "Severe thunderstorm with hail",
 }
+
+current_screen = None
 
 #Globals END
 
@@ -131,7 +137,7 @@ def report_directory_changes():
     
     if old_snapshot is None:
         return f"Scanning {watch_dir} for the first time -- baseline set({len(new_snapshot)} files."
-    
+        
     added, changed = diff_snapshots(old_snapshot, new_snapshot)
     if not added and not changed:
         return "No changes detected since last check"
@@ -193,62 +199,70 @@ setup_state = None
 setup_answers = {}
 
 def start_setup():
-    global setup_state
+    global setup_state, current_screen
     setup_state = "name"
-    text_widget.insert(tk.END, "Looks like this your first time running DevConsole \n")
-    text_widget.insert(tk.END, "Let's get you set up. \n\n")
-    text_widget.insert(tk.END, "What's your name? \n")
+    current_screen = "init"
+    text_widget.insert(tk.END, "init> Looks like this your first time running DevConsole \n")
+    text_widget.insert(tk.END, "init> Let's get you set up. \n\n")
+    text_widget.insert(tk.END, "init> What's your name? \n")
 
 def handle_setup_input(line):
-    global setup_state, config
+    global setup_state, config, current_screen
     answer = line.strip()
     if setup_state == "name":
         if not answer:
             text_widget.insert(tk.END, "Name can't be empty, How do you want me to call you?\n")
-            
             return
         
         setup_answers["name"] = answer
         setup_state = "identity"
+        current_screen = "init"
         #setup_answers["identity"]=0
-        text_widget.insert(tk.END, f"Nice to meet you, {answer}. \n")
-        text_widget.insert(tk.END, "What do you do? (e.g. Dev, Author, Sniper) \n")
+        text_widget.insert(tk.END, f"init> Nice to meet you, {answer}. \n")
+        text_widget.insert(tk.END, "init> What do you do? (e.g. Dev, Author, Sniper) \n")
         
     elif setup_state == "identity":
         if not answer:
-            text_widget.insert(tk.END, "I don't know who you are, What exactly do you do?")
+            text_widget.insert(tk.END, "init> I don't know who you are, What exactly do you do?")
             return
             
         setup_answers["identity"] = answer
+        current_screen = "init"
         setup_state = "directory"
-        #setup_answers["watch_dir"]="AAA"
-        #print(setup_answers["watch_dir"]) <--- for testing only
-        text_widget.insert(tk.END, "Which folder should I keep an eye on? \n")
-        text_widget.insert(tk.END, "(Type full path, e.g. C:\\Projects)\n")
+        text_widget.insert(tk.END, "init> Which folder should I keep an eye on? \n")
+        text_widget.insert(tk.END, "init> (Type full path, e.g. C:\\Projects)\n")
     elif setup_state == "directory":
+        current_screen = "init"
         if not answer:
-            text_widget.insert(tk.END, "Provide a folder that I should watch \n")
+            text_widget.insert(tk.END, "init> Provide a folder that I should watch \n")
             return
             
         if not os.path.isdir(answer):
             try:
                 os.makedirs(answer)
-                text_widget.insert(tk.END, f"That folder don't exists -- created {answer} \n")
+                text_widget.insert(tk.END, f"init> That folder don't exists -- created {answer} \n")
             except OSError as e:
-                text_widget.insert(tk.END, f"Couldn't create folder ({e}). Try another path \n")
+                text_widget.insert(tk.END, f"init> Couldn't create folder ({e}). Try another path \n")
                 return
         setup_answers["watch_dir"] = answer        
         
     #setup_answers["identity"] = answer
     print(len(setup_answers)) #<----troubleshooting
+    print(setup_state)
+    
     if len(setup_answers) >= 3: #<---- this is the fix not to go on save before the answers are completed
         #print(setup_answers) #<-- for troubelshooting
+        SWITCH = False
         save_config(setup_answers["name"],setup_answers["identity"],setup_answers["watch_dir"])
         config = load_config()
         setup_state = None
-        text_widget.insert(tk.END, "\n Setup complete, You are all set! type help.")
+        current_screen = None
+        text_widget.insert(tk.END, "init> Setup complete, You are all set! type help. \n")
         text_widget.insert(tk.END, report_directory_changes() + "\n\n")
-    
+        
+        weather_line = get_weather_summary()
+        if weather_line:
+            text_widget.insert(tk.END, f"Weather -- {weather_line}\n\n")
 
         
 def build_help_text():
@@ -260,9 +274,20 @@ def build_help_text():
     lines.append("")
     lines.append("Type 'help <keyword>' for more detail above")
     return "\n".join(lines)
+
+def disp_start_text():
+    """Builds the aligned keyword description blah blah blah. """
+    lines = ["Available commands: ",""]
+    width = max(len(l) for l in KEYWORD_START) + 2
+    for keyword, description in KEYWORD_START.items():
+        lines.append(f" {keyword:<{width}}{description}")
+    lines.append("")
+    lines.append("Type 'help <keyword>' for more detail above")
+    return "\n".join(lines)
     
 def run_command(command_line):
     """Takes the raw text user typed, returns the string to print as a response """
+    global current_screen
     parts = command_line.strip().split()
     if not parts:
         return ""
@@ -277,6 +302,15 @@ def run_command(command_line):
                 f"No help entry for  '{keyword}'. Type 'help' to see available keywords."                
             )
         return build_help_text()
+    elif cmd == "start":
+        current_screen = "start"
+        if args:
+            keyword = args[0].lower()
+            return KEYWORD_START.get(
+                keyword,
+                f"'{keyword}' is not available for your role."
+            )
+        return disp_start_text()
     elif cmd == "navigate":
         return "Placeholder: You dumb as shit are you?"
     elif cmd == "yesterday":
@@ -293,7 +327,7 @@ def run_command(command_line):
     elif cmd == "exit":
         return "__EXIT__"
     else:
-        return f" '{cmd}' is not recognize dumbass"
+        return f"{current_screen}> '{cmd}' is not recognize dumbass"
 
 #-----windows setup-----
 root = tk.Tk()
@@ -315,17 +349,18 @@ text_widget = tk.Text(
     pady=10,
 )
 text_widget.pack(fill="both", expand=True)
-PROMPT = "DevConsole> "
 
-#add colons to functions
+def get_prompt():
+    return f"{current_screen}> " if current_screen else "> "
 
 def print_prompt():
-    text_widget.insert(tk.END, PROMPT)
-#issue-1-when-keyword-is-inputted-nothing-happend
-    text_widget.mark_set("input_start", "end-1c") # land where typing actually happens
-    text_widget.mark_gravity("input_start","left") # pin it so it doesn't drift as you type
-    text_widget.see(tk.END)
 
+        text_widget.insert(tk.END, get_prompt()) #issue-1-when-keyword-is-inputted-nothing-happend
+        text_widget.mark_set("input_start", "end-1c") # land where typing actually happens
+        text_widget.mark_gravity("input_start","left") # pin it so it doesn't drift as you type
+        text_widget.see(tk.END)
+
+        
 def on_enter(event):
     line = text_widget.get("input_start","end-1c")
     text_widget.insert(tk.END, "\n")
@@ -361,24 +396,21 @@ text_widget.insert(tk.END, "      created by: CodingONPJs \n")
 text_widget.insert(tk.END, "===================================\n")
 #text_widget.insert(tk.END, "Hello Coding! Type 'help' \n\n")
 
-if is_initialized():
+if not is_initialized():
+    start_setup()
+else:
     config = load_config()
-    text_widget.insert(tk.END, f"Welcome back, {config['name']}. Type 'help' to get started.\n\n")
+    text_widget.insert(tk.END, f"Welcome back, {config['name']}. If this is your first time \n")
+    text_widget.insert(tk.END, f"type 'help' to see what is available for you. \n")
+    text_widget.insert(tk.END, f"if you already know around you can type 'start' \n")
 
     weather_line = get_weather_summary()
+    print_prompt()
     if weather_line:
         text_widget.insert(tk.END, f"Weather -- {weather_line}\n\n")
 
     text_widget.insert(tk.END, report_directory_changes() + "\n\n")
-else:
-    start_setup()
-
-
-#text_widget.mark_set("bookmark","6.0")
-#text_widget.mark_set("insert","bookmark")
+ 
 print_prompt()
-
 text_widget.focus_set()
-
-#text_widget.config(state="disabled")
 root.mainloop()
