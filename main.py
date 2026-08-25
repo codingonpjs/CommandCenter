@@ -8,6 +8,7 @@ import requests
 #0803 v0.025 - working interface
 #0804 v0.050 - add initialization file
 #0808 v0.100 - add watcher
+#0825 v0.110 - add mkcl (client folder scaffold) command
 #git fetch origin
 #git checkout separate-prompts-for-different-screen
 #
@@ -23,7 +24,8 @@ KEYWORD_HELP = {
     "navigate": "type in 'help' ",
     "yesterday": "when was that?",
     "whoami": "Who AM AYYYEE???",
-    "clear":"Clears your workspace"
+    "clear":"Clears your workspace",
+    "mkcl":"Scaffold a new client folder (asks for a 3-char code)"
 }
 KEYWORD_START = {
     "mke": "To make DIR in the ",
@@ -264,7 +266,46 @@ def handle_setup_input(line):
         if weather_line:
             text_widget.insert(tk.END, f"Weather -- {weather_line}\n\n")
 
-        
+# --- mkcl: scaffold a new client folder ---
+MKCL_SUBFOLDERS = ("client assets", "project", "project documents")
+mkcl_state = None
+
+def start_mkcl():
+    """Kicks off the mkcl wizard -- same pattern as start_setup()/handle_setup_input()."""
+    global mkcl_state, current_screen
+    mkcl_state = "code"
+    current_screen = "mkcl"
+    text_widget.insert(tk.END, "mkcl> Enter a 3-character client code: \n")
+
+def handle_mkcl_input(line):
+    global mkcl_state, current_screen
+    answer = line.strip()
+
+    if len(answer) != 3:
+        text_widget.insert(tk.END, f"mkcl> Code must be exactly 3 characters (got {len(answer)}). Try again: \n")
+        return
+
+    watch_dir = config["watch_dir"]
+    client_dir = os.path.join(watch_dir, answer)
+
+    if os.path.isdir(client_dir):
+        text_widget.insert(tk.END, f"mkcl> '{answer}' already exists in {watch_dir}. Enter a different code: \n")
+        return
+
+    try:
+        os.makedirs(client_dir)
+        for sub in MKCL_SUBFOLDERS:
+            os.makedirs(os.path.join(client_dir, sub))
+    except OSError as e:
+        text_widget.insert(tk.END, f"mkcl> Couldn't create folders ({e}). \n")
+        mkcl_state = None
+        current_screen = None
+        return
+
+    text_widget.insert(tk.END, f"mkcl> Done -- created {answer}/ with client assets, project, project documents in {watch_dir} \n\n")
+    mkcl_state = None
+    current_screen = None
+
 def build_help_text():
     """Builds the aligned keyword description blah blah blah. """
     lines = ["Available commands: ",""]
@@ -322,6 +363,9 @@ def run_command(command_line):
             f"Watching:{config['watch_dir']}\n"
             
         )
+    elif cmd == "mkcl":
+        start_mkcl()
+        return ""
     elif cmd == "clear":
         return "__CLEAR__"
     elif cmd == "exit":
@@ -367,6 +411,8 @@ def on_enter(event):
     
     if setup_state is not None:
         handle_setup_input(line)
+    elif mkcl_state is not None:
+        handle_mkcl_input(line)
     else:
             output = run_command(line)
             if output == "__CLEAR__":
