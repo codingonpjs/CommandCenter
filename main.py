@@ -211,42 +211,54 @@ class WorkLog:
 
 
 class ClientScaffolder:
-    """Scaffolds a new client folder (with standard subfolders) inside watch_dir."""
+    """Scaffolds a new client folder (with standard subfolders + a README) inside watch_dir."""
 
     SUBFOLDERS = ("client assets", "project", "project documents")
 
-    def create(self, watch_dir, code):
-        """Returns (status, message). status is 'retry' (bad input, ask again),
-        'abort' (unrecoverable, give up), or 'success'."""
+    def validate_code(self, watch_dir, code):
+        """Checks whether `code` is usable before asking any further questions.
+        Returns (ok, message) -- message explains the problem when ok is False."""
         if len(code) != 3:
-            return "retry", f"Code must be exactly 3 characters (got {len(code)}). Try again:"
+            return False, f"Code must be exactly 3 characters (got {len(code)}). Try again:"
+        if os.path.isdir(os.path.join(watch_dir, code)):
+            return False, f"'{code}' already exists in {watch_dir}. Enter a different code:"
+        return True, ""
 
+    def create(self, watch_dir, code, business, project_type, goal):
+        """Creates watch_dir/code/ with the standard subfolders and a README.md
+        summarizing the client. Returns (status, message); status is 'abort'
+        (unrecoverable) or 'success'."""
         client_dir = os.path.join(watch_dir, code)
-        if os.path.isdir(client_dir):
-            return "retry", f"'{code}' already exists in {watch_dir}. Enter a different code:"
-
         try:
             os.makedirs(client_dir)
             for sub in self.SUBFOLDERS:
                 os.makedirs(os.path.join(client_dir, sub))
+
+            readme_path = os.path.join(client_dir, "README.md")
+            with open(readme_path, "w", encoding="utf-8") as f:
+                f.write(f"# {code}\n\n")
+                f.write("## Client Overview\n\n")
+                f.write(f"- **Nature of business:** {business}\n")
+                f.write(f"- **Type of project:** {project_type}\n")
+                f.write(f"- **Project goal:** {goal}\n\n")
+                f.write(f"*Scaffolded via DevConsole on {datetime.date.today().isoformat()}*\n")
+
         except OSError as e:
             return "abort", f"Couldn't create folders ({e})."
 
-        return "success", f"Done -- created {code}/ with {', '.join(self.SUBFOLDERS)} in {watch_dir}"
+        return "success", f"Done -- created {code}/ with {', '.join(self.SUBFOLDERS)} and README.md in {watch_dir}"
 
 
 class DevConsoleApp:
     """Owns the window and ties config/watcher/weather/worklog/scaffolder together."""
 
     KEYWORD_HELP = {
-        "navigation": "Type a command and press Enter. Type 'help' anytime to see this list again.",
-        "start": "Log what you're setting out to do today (prompts for a description).",
-        "yesterday": "Show what you logged as your task(s) for yesterday.",
-        "whoami": "Show your saved name, identity, and watched folder.",
-        "changes": "Re-scan the watched folder for files added or changed since last check.",
-        "weather": "Show current weather for your configured city.",
-        "mkcl": "Scaffold a new client folder (asks for a 3-character code).",
-        "clear": "Clears everything currently shown in the window.",
+        "strt": "Log what you're setting out to do today (prompts for a description).",
+        "whom": "Show your saved name, identity, and watched folder.",
+        "chng": "Re-scan the watched folder for files added or changed since last check.",
+        "wthr": "Show current weather for your configured city.",
+        "mkcl": "Scaffold a new client folder with a README (asks for a code, business, project type, and goal).",
+        "cler": "Clears everything currently shown in the window.",
     }
 
     def __init__(self):
@@ -257,10 +269,11 @@ class DevConsoleApp:
         self.worklog = WorkLog(self.base_dir)
         self.scaffolder = ClientScaffolder()
 
-        self.current_screen = None    # None | "init" | "mkcl" | "start"
+        self.current_screen = None    # None | "init" | "mkcl" | "strt"
         self.setup_state = None       # None | "name" | "identity" | "directory"
         self.setup_answers = {}
-        self.mkcl_state = None        # None | "code"
+        self.mkcl_state = None        # None | "code" | "business" | "project_type" | "goal"
+        self.mkcl_answers = {}
         self.log_state = None         # None | "awaiting_description"
 
         self._build_window()
@@ -395,7 +408,7 @@ class DevConsoleApp:
 
     def _start_log(self):
         self.log_state = "awaiting_description"
-        self.current_screen = "start"
+        self.current_screen = "strt"
         self.text.insert(tk.END, "What do you want to do today?\n")
 
     def _handle_log_input(self, line):
@@ -413,14 +426,54 @@ class DevConsoleApp:
     def _start_mkcl(self):
         self.mkcl_state = "code"
         self.current_screen = "mkcl"
+        self.mkcl_answers = {}
         self.text.insert(tk.END, "Enter a 3-character client code:\n")
 
     def _handle_mkcl_input(self, line):
-        status, message = self.scaffolder.create(self.config.watch_dir, line.strip())
-        self.text.insert(tk.END, message + "\n")
-        if status != "retry":
+        answer = line.strip()
+
+        if self.mkcl_state == "code":
+            ok, message = self.scaffolder.validate_code(self.config.watch_dir, answer)
+            if not ok:
+                self.text.insert(tk.END, message + "\n")
+                return
+            self.mkcl_answers["code"] = answer
+            self.mkcl_state = "business"
+            self.text.insert(tk.END, "What's the nature of the client's business?\n")
+
+        elif self.mkcl_state == "business":
+            if not answer:
+                self.text.insert(tk.END, "Can't be empty -- what's the nature of the business?\n")
+                return
+            self.mkcl_answers["business"] = answer
+            self.mkcl_state = "project_type"
+            self.text.insert(tk.END, "What type of project is this?\n")
+
+        elif self.mkcl_state == "project_type":
+            if not answer:
+                self.text.insert(tk.END, "Can't be empty -- what type of project is this?\n")
+                return
+            self.mkcl_answers["project_type"] = answer
+            self.mkcl_state = "goal"
+            self.text.insert(tk.END, "What does the company want to achieve with this project?\n")
+
+        elif self.mkcl_state == "goal":
+            if not answer:
+                self.text.insert(tk.END, "Can't be empty -- what's the goal for this project?\n")
+                return
+            self.mkcl_answers["goal"] = answer
+
+            status, message = self.scaffolder.create(
+                self.config.watch_dir,
+                self.mkcl_answers["code"],
+                self.mkcl_answers["business"],
+                self.mkcl_answers["project_type"],
+                self.mkcl_answers["goal"],
+            )
+            self.text.insert(tk.END, message + "\n")
             self.mkcl_state = None
             self.current_screen = None
+            self.mkcl_answers = {}
 
     # ---- command handling ----
 
@@ -450,24 +503,21 @@ class DevConsoleApp:
                 )
             return self._build_help_text()
 
-        elif cmd == "start":
+        elif cmd == "strt":
             self._start_log()
             return ""
 
-        elif cmd == "yesterday":
-            return self.worklog.yesterday_summary()
-
-        elif cmd == "whoami":
+        elif cmd == "whom":
             return (
                 f"Name:      {self.config.name}\n"
                 f"Identity:  {self.config.identity}\n"
                 f"Watching:  {self.config.watch_dir}"
             )
 
-        elif cmd == "changes":
+        elif cmd == "chng":
             return self.watcher.check(self.config.watch_dir)
 
-        elif cmd == "weather":
+        elif cmd == "wthr":
             summary = self.weather.get_summary()
             return summary if summary else "Couldn't fetch weather right now -- check your internet connection."
 
@@ -475,7 +525,7 @@ class DevConsoleApp:
             self._start_mkcl()
             return ""
 
-        elif cmd == "clear":
+        elif cmd == "cler":
             return "__CLEAR__"
 
         elif cmd == "exit":
