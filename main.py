@@ -248,6 +248,26 @@ class ClientScaffolder:
 
         return "success", f"Done -- created {code}/ with {', '.join(self.SUBFOLDERS)} and README.md in {watch_dir}"
 
+    def list_clients(self, watch_dir):
+        """Returns a sorted list of 3-character client folder names directly under watch_dir."""
+        if not os.path.isdir(watch_dir):
+            return []
+        return sorted(
+            name for name in os.listdir(watch_dir)
+            if len(name) == 3 and os.path.isdir(os.path.join(watch_dir, name))
+        )
+
+    def read_readme(self, watch_dir, code):
+        """Returns (found, content_or_message) for the given client's README.md."""
+        client_dir = os.path.join(watch_dir, code)
+        if not os.path.isdir(client_dir):
+            return False, f"'{code}' doesn't exist in {watch_dir}."
+        readme_path = os.path.join(client_dir, "README.md")
+        if not os.path.isfile(readme_path):
+            return False, f"No README.md found for '{code}'."
+        with open(readme_path, encoding="utf-8") as f:
+            return True, f.read()
+
 
 class DevConsoleApp:
     """Owns the window and ties config/watcher/weather/worklog/scaffolder together."""
@@ -258,6 +278,7 @@ class DevConsoleApp:
         "chng": "Re-scan the watched folder for files added or changed since last check.",
         "wthr": "Show current weather for your configured city.",
         "mkcl": "Scaffold a new client folder with a README (asks for a code, business, project type, and goal).",
+        "clnt": "List client folders, or show one's README with 'clnt <code>'.",
         "cler": "Clears everything currently shown in the window.",
     }
 
@@ -524,6 +545,18 @@ class DevConsoleApp:
         elif cmd == "mkcl":
             self._start_mkcl()
             return ""
+
+        
+        elif cmd == "clnt":
+            if args:
+                _, content = self.scaffolder.read_readme(self.config.watch_dir, args[0])
+                return content
+            clients = self.scaffolder.list_clients(self.config.watch_dir)
+            if not clients:
+                return f"No client folders found in {self.config.watch_dir}."
+            lines = [f"Clients in {self.config.watch_dir}:"]
+            lines += [f"  {code}" for code in clients]
+            return "\n".join(lines)
 
         elif cmd == "cler":
             return "__CLEAR__"
