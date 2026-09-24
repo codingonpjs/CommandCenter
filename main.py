@@ -348,6 +348,8 @@ class DevConsoleApp:
         self.text.bind("<Left>", self._protect_history)
         self.text.bind("<Up>", lambda e: "break")
         self.text.bind("<Down>", lambda e: "break")
+        self.text.bind("<Key>", self._redirect_to_prompt)
+        self.text.bind("<<Paste>>", self._redirect_to_prompt)
 
     def _show_banner(self):
         self.text.insert(tk.END, "===================================\n")
@@ -546,7 +548,6 @@ class DevConsoleApp:
             self._start_mkcl()
             return ""
 
-        
         elif cmd == "clnt":
             if args:
                 _, content = self.scaffolder.read_readme(self.config.watch_dir, args[0])
@@ -604,6 +605,17 @@ class DevConsoleApp:
     def _protect_history(self, event):
         if self.text.compare(tk.INSERT, "<=", "input_start"):
             return "break"
+
+    def _redirect_to_prompt(self, event):
+        """Clicking into earlier output moves the cursor there (normal Tk
+        behavior, needed so text can still be selected/copied). But if the
+        cursor is still back there when a key is pressed or something is
+        pasted, snap it back to the prompt first -- otherwise the keystroke
+        or paste would land inside old, already-printed output instead of
+        at the current command line."""
+        if self.text.compare(tk.INSERT, "<", "input_start"):
+            self.text.mark_set(tk.INSERT, tk.END)
+            self.text.tag_remove("sel", "1.0", "end")
 
 
 if __name__ == "__main__":
